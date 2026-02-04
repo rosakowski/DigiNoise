@@ -2,17 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleIdentifier</key>
-	<string></string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
 		<string>processing</string>
-		<string>&lt;key&gt;BGTaskSchedulerPermittedIdentifiers&lt;/key&gt;
-&lt;array&gt;
-    &lt;string&gt;com.diginoise.refresh&lt;/string&gt;
-    &lt;string&gt;com.diginoise.processing&lt;/string&gt;
-&lt;/array&gt;</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.diginoise.refresh</string>
+		<string>com.diginoise.processing</string>
 	</array>
 </dict>
 </plist>
