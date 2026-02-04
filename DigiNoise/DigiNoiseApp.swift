@@ -2,31 +2,42 @@
 //  DigiNoiseApp.swift
 //  DigiNoise
 //
-//  Created by Ross Sakowski on 2/3/26.
+//  Created by Ross Sakowski on 1/24/26.
 //
 
 import SwiftUI
-import SwiftData
+import BackgroundTasks
 
 @main
 struct DigiNoiseApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
-
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(sharedModelContainer)
+    }
+}
+
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+        // Register background tasks
+        BackgroundTaskManager.shared.registerBackgroundTasks()
+        
+        // If the app was running before, schedule background tasks
+        if UserDefaults.standard.bool(forKey: "isRunning") {
+            BackgroundTaskManager.shared.scheduleAppRefresh()
+            BackgroundTaskManager.shared.scheduleProcessingTask()
+        }
+        
+        return true
+    }
+    
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        // Schedule background tasks when entering background
+        if UserDefaults.standard.bool(forKey: "isRunning") {
+            BackgroundTaskManager.shared.scheduleAppRefresh()
+            BackgroundTaskManager.shared.scheduleProcessingTask()
+        }
     }
 }
