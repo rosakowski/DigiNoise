@@ -2,7 +2,7 @@
 //  DigiNoiseApp.swift
 //  DigiNoise
 //
-//  Created by Ross Sakowski on 1/24/26.
+//  App entry point with background task setup
 //
 
 import SwiftUI
@@ -21,23 +21,16 @@ struct DigiNoiseApp: App {
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
-        // Register background tasks
-        BackgroundTaskManager.shared.registerBackgroundTasks()
-        
-        // If the app was running before, schedule background tasks
-        if UserDefaults.standard.bool(forKey: "isRunning") {
-            BackgroundTaskManager.shared.scheduleAppRefresh()
-            BackgroundTaskManager.shared.scheduleProcessingTask()
-        }
-        
+        BackgroundTaskManager.shared.register()
+        BackgroundTaskManager.shared.syncSchedule()
         return true
     }
     
     func applicationDidEnterBackground(_ application: UIApplication) {
-        // Schedule background tasks when entering background
-        if UserDefaults.standard.bool(forKey: "isRunning") {
-            BackgroundTaskManager.shared.scheduleAppRefresh()
-            BackgroundTaskManager.shared.scheduleProcessingTask()
-        }
+        BackgroundTaskManager.shared.syncSchedule()
+    }
+    
+    func applicationWillEnterForeground(_ application: UIApplication) {
+        BackgroundTaskManager.shared.syncSchedule()
     }
 }
