@@ -391,7 +391,6 @@ struct SettingsView: View {
             apiCategoriesSection
             languagesSection
             safariCategoriesSection
-            privacySection
         }
         .scrollContentBackground(.hidden)
     }
@@ -475,16 +474,6 @@ struct SettingsView: View {
                 ))
                 .tint(.cyan)
             }
-        }
-    }
-    
-    private var privacySection: some View {
-        Section("Privacy") {
-            Toggle("Stealth Mode", isOn: $viewModel.stealthMode)
-                .tint(.cyan)
-            Text("Disables all notifications and haptic feedback")
-                .font(.caption)
-                .foregroundColor(.gray)
         }
     }
 }

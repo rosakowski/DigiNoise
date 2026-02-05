@@ -51,11 +51,7 @@ class NoiseViewModel: ObservableObject {
     }
     @Published var timeRemaining = "--:--:--"
     @Published var stats = SearchStats()
-    
-    @Published var stealthMode = UserDefaults.standard.bool(forKey: "stealthMode") {
-        didSet { UserDefaults.standard.set(stealthMode, forKey: "stealthMode") }
-    }
-    
+
     @Published var hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
         didSet { UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding") }
     }
@@ -198,7 +194,6 @@ class NoiseViewModel: ObservableObject {
         isRunning = true
         scheduleNewSearch()
         BackgroundTaskManager.shared.syncSchedule()
-        BackgroundTaskManager.shared.requestNotificationPermissions()
     }
 
     func stop() {
@@ -429,14 +424,6 @@ class NoiseViewModel: ObservableObject {
                     nextSearchTime = targetTime
                     BackgroundTaskManager.shared.persistNextFireTime(targetTime)
                 }
-
-                // Send notification
-                if !stealthMode {
-                    BackgroundTaskManager.shared.sendBackgroundNotification(
-                        title: "DigiNoise",
-                        body: result.success ? "API: \(endpoint.description)" : "Request failed"
-                    )
-                }
             }
         }
     }
@@ -581,11 +568,6 @@ class NoiseViewModel: ObservableObject {
                 await MainActor.run {
                     apiCallHistory[endpoint.url] = Date()
                     consecutiveFailures[endpoint.url] = 0
-                    
-                    if !stealthMode {
-                        let generator = UIImpactFeedbackGenerator(style: .light)
-                        generator.impactOccurred()
-                    }
                 }
                 return (true, dataSize, endpoint)
             }
