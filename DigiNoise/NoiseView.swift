@@ -134,7 +134,12 @@ class NoiseViewModel: ObservableObject {
             UserDefaults.standard.set(dailyAPILimit, forKey: "dailyAPILimit")
         }
     }
-    
+
+    /// Today's request count from BackgroundTaskManager (authoritative source)
+    var todaySearches: Int {
+        BackgroundTaskManager.shared.getDailyRequestCount()
+    }
+
     var scheduleDisplayText: String {
         if !useCustomSchedule {
             return "\(startHour):00 - \(endHour):00 Daily"
@@ -181,9 +186,9 @@ class NoiseViewModel: ObservableObject {
         }
         
         startDisplayTimer()
-        
+
         if isRunning {
-            scheduleBackgroundTasks()
+            BackgroundTaskManager.shared.syncSchedule()
             resumeOrSchedule()
         }
     }
@@ -192,10 +197,10 @@ class NoiseViewModel: ObservableObject {
     func start() {
         isRunning = true
         scheduleNewSearch()
-        scheduleBackgroundTasks()
+        BackgroundTaskManager.shared.syncSchedule()
         BackgroundTaskManager.shared.requestNotificationPermissions()
     }
-    
+
     func stop() {
         isRunning = false
         foregroundTimer?.invalidate()
@@ -203,7 +208,7 @@ class NoiseViewModel: ObservableObject {
         nextSearchTime = nil
         currentStatus = "Stopped"
         timeRemaining = "--:--:--"
-        cancelBackgroundTasks()
+        BackgroundTaskManager.shared.cancelAllTasks()
     }
     
     func resetStats() {
@@ -217,16 +222,20 @@ class NoiseViewModel: ObservableObject {
         if wasReset {
             saveStats()
         }
-        
+
+        // Sync with BackgroundTaskManager (handles overdue detection)
+        BackgroundTaskManager.shared.syncSchedule()
+
         guard isRunning else { return }
-        
+
         resumeOrSchedule()
     }
     
     /// Resumes countdown to existing target time, or schedules new if none exists
     private func resumeOrSchedule() {
-        // Check daily limit first
-        if stats.todaySearches >= dailyAPILimit {
+        // Check daily limit first (use BackgroundTaskManager's counter for consistency)
+        let bgCount = BackgroundTaskManager.shared.getDailyRequestCount()
+        if bgCount >= dailyAPILimit {
             currentStatus = "Daily limit reached"
             timeRemaining = "Resets at midnight"
             nextSearchTime = nil
@@ -265,12 +274,14 @@ class NoiseViewModel: ObservableObject {
     /// Schedules a brand new search with random interval
     private func scheduleNewSearch() {
         guard isRunning else { return }
-        
-        // Check daily limit
-        if stats.todaySearches >= dailyAPILimit {
+
+        // Check daily limit (use BackgroundTaskManager's counter for consistency)
+        let bgCount = BackgroundTaskManager.shared.getDailyRequestCount()
+        if bgCount >= dailyAPILimit {
             currentStatus = "Daily limit reached"
             timeRemaining = "Resets at midnight"
             nextSearchTime = nil
+            BackgroundTaskManager.shared.clearPersistedSchedule()
             scheduleCheckAtMidnight()
             return
         }
@@ -286,7 +297,10 @@ class NoiseViewModel: ObservableObject {
         let interval = TimeInterval.random(in: 3600...21600)
         let targetTime = Date().addingTimeInterval(interval)
         nextSearchTime = targetTime
-        
+
+        // Persist to BackgroundTaskManager for reliability
+        BackgroundTaskManager.shared.persistNextFireTime(targetTime)
+
         resumeTimerToTarget(targetTime)
         updateStatus()
     }
@@ -323,19 +337,22 @@ class NoiseViewModel: ObservableObject {
     func performSearch() async {
         let wasReset = stats.checkAndResetDaily()
         if wasReset { saveStats() }
-        
+
         // Clear the target time since we're executing
         nextSearchTime = nil
-        
-        if stats.todaySearches >= dailyAPILimit {
+        BackgroundTaskManager.shared.clearPersistedSchedule()
+
+        // Check daily limit using BackgroundTaskManager's counter
+        let bgCount = BackgroundTaskManager.shared.getDailyRequestCount()
+        if bgCount >= dailyAPILimit {
             scheduleNewSearch() // This will set the "daily limit reached" status
             return
         }
-        
+
         currentStatus = "Making request..."
-        
+
         let result = await performAPICall()
-        
+
         if let endpoint = result.endpoint {
             let _ = stats.addSearch(
                 query: endpoint.description,
@@ -347,10 +364,15 @@ class NoiseViewModel: ObservableObject {
                 apiLanguage: endpoint.language?.rawValue
             )
             lastSearchDescription = endpoint.description
+
+            // Increment BackgroundTaskManager's counter for consistency
+            if result.success {
+                BackgroundTaskManager.shared.incrementDailyRequestCount()
+            }
         }
-        
+
         saveStats()
-        
+
         // Schedule the next search
         scheduleNewSearch()
     }
@@ -360,18 +382,20 @@ class NoiseViewModel: ObservableObject {
         // Check conditions on main actor
         let shouldRun = await MainActor.run {
             guard isRunning else { return false }
-            
+
             let wasReset = stats.checkAndResetDaily()
             if wasReset { saveStats() }
-            
-            return stats.todaySearches < dailyAPILimit && isWithinActiveHours()
+
+            // Use BackgroundTaskManager's counter for consistency
+            let bgCount = BackgroundTaskManager.shared.getDailyRequestCount()
+            return bgCount < dailyAPILimit && isWithinActiveHours()
         }
-        
+
         guard shouldRun else { return }
-        
+
         // Perform the API call
         let result = await performAPICall()
-        
+
         // Update state on main actor
         await MainActor.run {
             if let endpoint = result.endpoint {
@@ -384,19 +408,28 @@ class NoiseViewModel: ObservableObject {
                     apiCategory: endpoint.category.rawValue,
                     apiLanguage: endpoint.language?.rawValue
                 )
-                
+
                 lastSearchDescription = endpoint.description
                 saveStats()
-                
+
+                // Increment BackgroundTaskManager's counter
+                if result.success {
+                    BackgroundTaskManager.shared.incrementDailyRequestCount()
+                }
+
                 // Clear the next search time since we executed
                 nextSearchTime = nil
-                
+                BackgroundTaskManager.shared.clearPersistedSchedule()
+
                 // Schedule a new target time
-                if stats.todaySearches < dailyAPILimit && isWithinActiveHours() {
+                let bgCount = BackgroundTaskManager.shared.getDailyRequestCount()
+                if bgCount < dailyAPILimit && isWithinActiveHours() {
                     let interval = TimeInterval.random(in: 3600...21600)
-                    nextSearchTime = Date().addingTimeInterval(interval)
+                    let targetTime = Date().addingTimeInterval(interval)
+                    nextSearchTime = targetTime
+                    BackgroundTaskManager.shared.persistNextFireTime(targetTime)
                 }
-                
+
                 // Send notification
                 if !stealthMode {
                     BackgroundTaskManager.shared.sendBackgroundNotification(
@@ -448,25 +481,25 @@ class NoiseViewModel: ObservableObject {
     }
     
     private func scheduleBackgroundTasks() {
-        BackgroundTaskManager.shared.scheduleAppRefresh()
-        BackgroundTaskManager.shared.scheduleProcessingTask()
+        BackgroundTaskManager.shared.syncSchedule()
     }
-    
+
     private func cancelBackgroundTasks() {
         BackgroundTaskManager.shared.cancelAllTasks()
     }
     
     private func updateStatus() {
-        if stats.todaySearches >= dailyAPILimit {
+        let bgCount = BackgroundTaskManager.shared.getDailyRequestCount()
+        if bgCount >= dailyAPILimit {
             currentStatus = "Daily limit reached"
             return
         }
-        
+
         if !isWithinActiveHours() {
             updateStatusForInactiveHours()
             return
         }
-        
+
         currentStatus = "Active"
     }
     

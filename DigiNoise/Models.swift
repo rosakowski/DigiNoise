@@ -212,77 +212,63 @@ struct DaySchedule: Codable, Identifiable {
     }
 }
 
-// MARK: - Statistics
+// MARK: - Statistics (Simplified)
 struct SearchStats: Codable {
     var totalSearches: Int = 0
-    var todaySearches: Int = 0
     var lastResetDate: Date = Date()
-    var weeklySearches: [Int] = Array(repeating: 0, count: 7)
     var searchHistory: [SearchRecord] = []
     var successfulRequests: Int = 0
     var failedRequests: Int = 0
-    var totalDataUsed: Int64 = 0
-    
+
     var successRate: Double {
         let total = successfulRequests + failedRequests
-        guard total > 0 else { return 0 }
+        guard total > 0 else { return 100 }
         return Double(successfulRequests) / Double(total) * 100
     }
-    
+
     struct SearchRecord: Codable, Identifiable {
         let id: UUID
         let query: String
         let timestamp: Date
         let mode: String
         let success: Bool
-        let dataSize: Int64?
         let apiURL: String?
         let apiCategory: String?
         let apiLanguage: String?
-        
-        init(id: UUID = UUID(), query: String, timestamp: Date, mode: String, success: Bool, dataSize: Int64? = nil, apiURL: String? = nil, apiCategory: String? = nil, apiLanguage: String? = nil) {
+
+        init(id: UUID = UUID(), query: String, timestamp: Date, mode: String, success: Bool, apiURL: String? = nil, apiCategory: String? = nil, apiLanguage: String? = nil) {
             self.id = id
             self.query = query
             self.timestamp = timestamp
             self.mode = mode
             self.success = success
-            self.dataSize = dataSize
             self.apiURL = apiURL
             self.apiCategory = apiCategory
             self.apiLanguage = apiLanguage
         }
     }
-    
+
     mutating func addSearch(query: String, mode: String, success: Bool = true, dataSize: Int64 = 0, apiURL: String? = nil, apiCategory: String? = nil, apiLanguage: String? = nil) -> Bool {
         totalSearches += 1
-        
+
         if success {
             successfulRequests += 1
         } else {
             failedRequests += 1
         }
-        
-        totalDataUsed += dataSize
-        
+
         let today = Calendar.current.startOfDay(for: Date())
         var wasReset = false
         if Calendar.current.startOfDay(for: lastResetDate) < today {
-            todaySearches = 0
             lastResetDate = Date()
-            weeklySearches.removeFirst()
-            weeklySearches.append(0)
             wasReset = true
         }
-        
-        todaySearches += 1
-        weeklySearches[weeklySearches.count - 1] += 1
-        
+
         let record = SearchRecord(
             query: query,
             timestamp: Date(),
             mode: mode,
             success: success,
-            dataSize: dataSize > 0 ? dataSize : nil,
             apiURL: apiURL,
             apiCategory: apiCategory,
             apiLanguage: apiLanguage
@@ -291,22 +277,18 @@ struct SearchStats: Codable {
         if searchHistory.count > 100 {
             searchHistory.removeLast()
         }
-        
+
         return wasReset
     }
-    
+
     mutating func addManualSearch(query: String) {
         totalSearches += 1
-        
+
         let today = Calendar.current.startOfDay(for: Date())
         if Calendar.current.startOfDay(for: lastResetDate) < today {
             lastResetDate = Date()
-            weeklySearches.removeFirst()
-            weeklySearches.append(0)
         }
-        
-        weeklySearches[weeklySearches.count - 1] += 1
-        
+
         let record = SearchRecord(
             query: query,
             timestamp: Date(),
@@ -318,42 +300,13 @@ struct SearchStats: Codable {
             searchHistory.removeLast()
         }
     }
-    
+
     mutating func checkAndResetDaily() -> Bool {
         let today = Calendar.current.startOfDay(for: Date())
         if Calendar.current.startOfDay(for: lastResetDate) < today {
-            todaySearches = 0
             lastResetDate = Date()
-            weeklySearches.removeFirst()
-            weeklySearches.append(0)
             return true
         }
         return false
-    }
-    
-    func formattedDataUsage() -> String {
-        let bytes = Double(totalDataUsed)
-        if bytes < 1024 {
-            return String(format: "%.0f B", bytes)
-        } else if bytes < 1024 * 1024 {
-            return String(format: "%.1f KB", bytes / 1024)
-        } else if bytes < 1024 * 1024 * 1024 {
-            return String(format: "%.2f MB", bytes / (1024 * 1024))
-        } else {
-            return String(format: "%.2f GB", bytes / (1024 * 1024 * 1024))
-        }
-    }
-    
-    func estimatedBatteryImpact() -> String {
-        let requestsPerDay = Double(totalSearches) / max(1, Double(Calendar.current.dateComponents([.day], from: lastResetDate, to: Date()).day ?? 1))
-        let dailyImpact = requestsPerDay * 0.0003
-        
-        if dailyImpact < 0.001 {
-            return "<0.001%"
-        } else if dailyImpact < 0.01 {
-            return String(format: "~%.3f%%", dailyImpact)
-        } else {
-            return String(format: "~%.2f%%", dailyImpact)
-        }
     }
 }

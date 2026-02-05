@@ -145,7 +145,7 @@ struct ContentView: View {
     
     private var statsRows: some View {
         VStack(spacing: 12) {
-            InfoRow(label: "API Requests Today", value: "\(viewModel.stats.todaySearches) / \(viewModel.dailyAPILimit)")
+            InfoRow(label: "API Requests Today", value: "\(viewModel.todaySearches) / \(viewModel.dailyAPILimit)")
             InfoRow(label: "Total Requests", value: "\(viewModel.stats.totalSearches)")
             InfoRow(label: "Next Request In", value: viewModel.timeRemaining)
             InfoRow(label: "Status", value: viewModel.currentStatus)
@@ -503,7 +503,7 @@ struct StatsView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         statsCards
-                        impactCard
+                        reliabilityCard
                         historyCard
                         resetButton
                     }
@@ -522,42 +522,43 @@ struct StatsView: View {
     
     private var statsCards: some View {
         HStack(spacing: 16) {
-            StatCard(title: "Today", value: "\(viewModel.stats.todaySearches)", color: .cyan)
+            StatCard(title: "Today", value: "\(viewModel.todaySearches)", color: .cyan)
             StatCard(title: "Total", value: "\(viewModel.stats.totalSearches)", color: .green)
         }
         .padding(.horizontal)
     }
-    
-    private var impactCard: some View {
+
+    private var reliabilityCard: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Resource Impact").font(.headline).foregroundColor(.white)
-                
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text("Battery").font(.caption).foregroundColor(.gray)
-                        Text(viewModel.stats.estimatedBatteryImpact()).foregroundColor(.white)
-                    }
-                    Spacer()
-                    VStack(alignment: .trailing) {
-                        Text("Data Used").font(.caption).foregroundColor(.gray)
-                        Text(viewModel.stats.formattedDataUsage()).foregroundColor(.white)
-                    }
-                }
-                
-                Divider().background(Color.white.opacity(0.2))
-                
+                Text("Reliability").font(.headline).foregroundColor(.white)
+
                 HStack {
                     VStack(alignment: .leading) {
                         Text("Success Rate").font(.caption).foregroundColor(.gray)
                         Text("\(viewModel.stats.successRate, specifier: "%.1f")%")
+                            .font(.title2)
+                            .fontWeight(.semibold)
                             .foregroundColor(viewModel.stats.successRate >= 90 ? .green : .orange)
                     }
                     Spacer()
-                    VStack(alignment: .trailing) {
-                        Text("\(viewModel.stats.successfulRequests) success").font(.caption).foregroundColor(.green)
-                        Text("\(viewModel.stats.failedRequests) failed").font(.caption).foregroundColor(.red)
+                    VStack(alignment: .trailing, spacing: 4) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                                .font(.caption)
+                            Text("\(viewModel.stats.successfulRequests)")
+                                .foregroundColor(.white)
+                        }
+                        HStack(spacing: 4) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.red)
+                                .font(.caption)
+                            Text("\(viewModel.stats.failedRequests)")
+                                .foregroundColor(.white)
+                        }
                     }
+                    .font(.subheadline)
                 }
             }
             .padding()
